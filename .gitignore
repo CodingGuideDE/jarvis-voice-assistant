@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtuelle Umgebung
+jarvis_env/
+venv/
+.venv/
+
+# Aufnahmen / Modelle / Logs
+audio_recordings/
+*.wav
+*.mp3
+*.log
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Build / Dist
+build/
+dist/
+*.egg-info/
