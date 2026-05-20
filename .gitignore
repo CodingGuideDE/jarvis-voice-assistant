@@ -29,6 +29,7 @@ audio_recordings/
 
 # Jupyter
 .ipynb_checkpoints/
+*.ipynb
 
 # Build / Dist
 build/
