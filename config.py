@@ -33,11 +33,5 @@ THINK_EFFORT_SPEAK:   str | None = None
 # "execute" → Antworten als AppleScript ausgeführt
 EXECUTION_MODE: str = "execute"
 
-# ── TTS (Sprachausgabe via macOS 'say') ──────────────────────────────────────
-# Stimme für die Sprachausgabe. Verfügbare Stimmen anzeigen: say -v '?'
-# Für natürlicheren Klang eine Premium-Stimme laden:
-#   Systemeinstellungen → Bedienungshilfen → Gesprochene Inhalte
-#   → Systemstimme → Stimme verwalten  (z. B. "Anna (Premium)")
-# Den exakten Namen aus 'say -v ?' hier eintragen. Leer ("") → Systemstandard.
-TTS_VOICE: str = "Anna"
-TTS_RATE:  int = 180   # Wörter pro Minute — leicht langsamer wirkt natürlicher
+# ── TTS (macOS say) ───────────────────────────────────────────────────────────
+# Kein -v Flag → System-Standardstimme aus Systemeinstellungen wird verwendet.

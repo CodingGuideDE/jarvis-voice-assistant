@@ -15,9 +15,6 @@ openai-whisper>=20231117
 # LLM Integration (optional)
 ollama>=0.1.0
 
-# Text-to-Speech
-pyttsx3>=2.90
-
 # Optional: Für erweiterte Funktionen
 # python-dotenv>=0.19.0    # Für API Keys (wenn Cloud-Integration hinzugefügt wird)
 # requests>=2.28.0         # Für HTTP-Anfragen

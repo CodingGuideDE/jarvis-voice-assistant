@@ -65,32 +65,42 @@ class AIHandler:
             self.on_status("Verarbeite Anfrage...")
 
         prompt = self._build_prompt(text, mode)
+
+        if mode == "speak":
+            full_response = self._query_llm(prompt, mode)
+            if not full_response:
+                return
+            if self.on_status:
+                preview = full_response[:40].replace("\n", " ")
+                self.on_status(f"Antwort: {preview}")
+            if self.on_token:
+                self.on_token(f"\nJarvis: {full_response}\n")
+            self._say(full_response)
+            return
+
+        # Execute-Modus
         full_response = self._query_llm(prompt, mode)
         if not full_response:
             return
-
         if self.on_status:
             preview = full_response[:40].replace("\n", " ")
             self.on_status(f"Antwort: {preview}")
         if self.on_token:
             self.on_token(f"\nJarvis: {full_response}\n")
 
-        if mode == "execute":
-            script = self._extract_script(full_response)
-            ok, err = self.execute_script(script)
-            if not ok and not self._is_permission_error(err):
-                print("\nSyntax-/Laufzeitfehler — bitte Modell um Korrektur...\n", flush=True)
-                if self.on_status:
-                    self.on_status("Korrigiere Script...")
-                retry_prompt = self._build_retry_prompt(text, script, err)
-                retry_response = self._query_llm(retry_prompt, mode)
-                if retry_response:
-                    retry_script = self._extract_script(retry_response)
-                    if self.on_token:
-                        self.on_token(f"\nJarvis (korrigiert): {retry_script}\n")
-                    self.execute_script(retry_script)
-        elif mode == "speak":
-            threading.Thread(target=self._say, args=(full_response,), daemon=True).start()
+        script = self._extract_script(full_response)
+        ok, err = self.execute_script(script)
+        if not ok and not self._is_permission_error(err):
+            print("\nSyntax-/Laufzeitfehler — bitte Modell um Korrektur...\n", flush=True)
+            if self.on_status:
+                self.on_status("Korrigiere Script...")
+            retry_prompt = self._build_retry_prompt(text, script, err)
+            retry_response = self._query_llm(retry_prompt, mode)
+            if retry_response:
+                retry_script = self._extract_script(retry_response)
+                if self.on_token:
+                    self.on_token(f"\nJarvis (korrigiert): {retry_script}\n")
+                self.execute_script(retry_script)
 
     def _query_llm(self, prompt: str, mode: str) -> str:
         """Sendet einen Prompt an Ollama und gibt die gestreamte Antwort zurück."""
@@ -103,6 +113,13 @@ class AIHandler:
             else config.THINK_EFFORT_SPEAK
         )
         think_param = effort if effort else False  # None/"" → Thinking AUS
+
+        # num_predict gilt für Thinking + Response zusammen. Sobald Reasoning
+        # aktiv ist, ist eine harte Obergrenze gefährlich — das Modell wird
+        # mitten im Denken abgeschnitten und liefert leere Antworten.
+        # -1 = unbegrenzt. Nur ohne Thinking wird das Modus-Budget durchgesetzt.
+        budget = -1 if think_param else max_tokens
+
         try:
             print(f"\n{config.OLLAMA_MODEL} antwortet:")
             print("-" * 40)
@@ -115,7 +132,7 @@ class AIHandler:
                     "stream": True,
                     "think": think_param,
                     "options": {
-                        "num_predict": max_tokens,
+                        "num_predict": budget,
                         "temperature": config.LLM_TEMPERATURE,
                     },
                 },
@@ -125,10 +142,20 @@ class AIHandler:
             resp.raise_for_status()
 
             parts: list[str] = []
+            thinking_parts: list[str] = []
             for line in resp.iter_lines():
                 if not line:
                     continue
                 data = json.loads(line)
+
+                # Manche Ollama-Versionen / Thinking-Modelle senden Reasoning
+                # im separaten "thinking"-Feld — ohne Auslesen sieht die
+                # Antwort leer aus, obwohl das Modell aktiv generiert.
+                think_chunk = data.get("thinking", "")
+                if think_chunk:
+                    thinking_parts.append(think_chunk)
+                    print(think_chunk, end="", flush=True)
+
                 chunk = data.get("response", "")
                 if chunk:
                     parts.append(chunk)
@@ -137,9 +164,18 @@ class AIHandler:
                     break
 
             full_response = "".join(parts).strip()
+            full_thinking = "".join(thinking_parts).strip()
             print()
-            print(f"\n[JARVIS] Antwort ({len(full_response)} Zeichen): {full_response[:80]!r}", flush=True)
+            print(
+                f"\n[JARVIS] Antwort ({len(full_response)} Z. Response, "
+                f"{len(full_thinking)} Z. Thinking): {full_response[:80]!r}",
+                flush=True,
+            )
             print("-" * 40 + "\n")
+
+            if not full_response and full_thinking and self.on_status:
+                self.on_status("Modell hat nur nachgedacht, keine Antwort — Budget zu klein?")
+
             return full_response
 
         except Exception as e:
@@ -244,20 +280,13 @@ class AIHandler:
 
     # ── TTS ──────────────────────────────────────────────────────────────────
 
-    def speak(self, text: str) -> None:
-        """Liest vollständigen Text nicht-blockierend vor."""
-        threading.Thread(target=self._say, args=(text,), daemon=True).start()
-
-    def _say(self, text: str) -> None:
-        cmd = ["say"]
-        if config.TTS_VOICE:
-            cmd += ["-v", config.TTS_VOICE]
-        if config.TTS_RATE:
-            cmd += ["-r", str(config.TTS_RATE)]
-        cmd.append(text.strip())
+    @staticmethod
+    def _say(text: str) -> None:
+        """Liest Text via macOS say vor."""
         try:
-            subprocess.run(cmd, check=False, timeout=120)
-        except subprocess.TimeoutExpired:
-            print("TTS Timeout\n")
+            subprocess.run(["say", text], check=False, timeout=120)
         except Exception as e:
-            print(f"Fehler beim Vorlesen: {e}\n")
+            print(f"say fehlgeschlagen: {e}")
+
+    def speak(self, text: str) -> None:
+        self._say(text)

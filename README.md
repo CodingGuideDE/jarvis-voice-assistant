@@ -12,7 +12,7 @@ Alles läuft lokal — kein Cloud-Service, keine Datenübertragung.
 - **Zwei Modi**, zur Laufzeit per UI umschaltbar:
   - **Vorlesen** — Antwort wird mit `say` ausgesprochen
   - **Script-Ausführung** — Antwort wird als AppleScript via `osascript` ausgeführt; bei Syntaxfehlern automatischer Korrektur-Retry
-- **Thinking-Budget** für Reasoning-Modelle (Aus / Niedrig / Mittel / Hoch) über die UI
+- **Thinking-Budget** für Reasoning-Modelle (Aus / Niedrig / Mittel / Hoch) über die UI — **nur für schnelle Modelle empfohlen** (siehe Hinweis unten)
 - **Tkinter-GUI** im Catppuccin-Mocha-Theme mit Live-Statusanzeige und Ausgabefeld
 - **CLI-Fallback** falls die GUI nicht startet
 
@@ -114,8 +114,19 @@ Alle Parameter in [config.py](config.py):
 | `THINK_EFFORT_EXECUTE` | `"medium"` | Reasoning-Budget Execute (`None`/`"low"`/`"medium"`/`"high"`) |
 | `THINK_EFFORT_SPEAK` | `None` | Reasoning AUS für Vorlesen |
 | `EXECUTION_MODE` | `"execute"` | Startmodus (`"execute"` oder `"speak"`) |
-| `TTS_VOICE` | `"Anna"` | macOS-Stimme (`say -v '?'` zeigt verfügbare) |
-| `TTS_RATE` | `180` | Wörter pro Minute |
+
+> **Hinweis zum Thinking-Prozess:** Bei aktivem Reasoning wird das Token-Limit
+> der Anfrage aufgehoben (`num_predict = -1`), damit die Antwort nicht mitten
+> im Nachdenken abgeschnitten wird. Das bedeutet aber auch: die gesamte
+> Antwortzeit hängt direkt an der Inferenzgeschwindigkeit des Modells.
+> **Thinking ist daher nur für schnelle Modelle geeignet** (kleine 3B–4B-Modelle
+> auf Apple Silicon, MoE-Modelle wie `qwen3.5:4b`). Bei größeren oder
+> langsameren Modellen wird die Wartezeit unzumutbar lang —
+> dann `THINK_EFFORT_*` auf `None` setzen.
+
+Für die Sprachausgabe wird `say` ohne `-v`-Flag verwendet — Jarvis nutzt
+die in den Systemeinstellungen konfigurierte Standardstimme
+(*Bedienungshilfen → Gesprochene Inhalte → Systemstimme*).
 
 ## Architektur
 
@@ -162,7 +173,13 @@ curl http://localhost:11434/api/tags
 Sollte die Modell-Liste zurückgeben. Falls nicht: `ollama serve` starten.
 
 ### Modell liefert leere Antworten
-Für Reasoning-Modelle (qwen3.5, gemma4 etc.) muss `THINK_EFFORT_*` entweder gesetzt oder das Token-Budget hoch genug sein — sonst werden alle Tokens für unsichtbares Reasoning verbraucht. In der UI „Thinking: Aus" wählen oder `LLM_MAX_TOKENS_EXECUTE` erhöhen.
+Bei Reasoning-Modellen (qwen3.5, gemma4 etc.) ohne aktiviertes Thinking
+verbraucht das Modell ggf. trotzdem Tokens für unsichtbares Reasoning und
+schneidet die eigentliche Antwort ab. Lösungen:
+- In der UI „Thinking" auf **Niedrig/Mittel/Hoch** stellen (dann ist das
+  Token-Limit aufgehoben — empfohlen nur für schnelle Modelle)
+- Oder `LLM_MAX_TOKENS_EXECUTE`/`_SPEAK` deutlich erhöhen
+- Oder ein nicht-thinking Modell verwenden (z. B. `qwen2.5:3b`, `llama3.2:3b`)
 
 ### Whisper transkribiert nichts / liefert NaN
 - Whisper läuft bewusst auf **CPU/fp32** — MPS produziert NaN-Logits

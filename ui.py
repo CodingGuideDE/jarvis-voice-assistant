@@ -5,10 +5,16 @@ Tkinter-Oberfläche zur Steuerung von Jarvis.
 import threading
 import time
 import tkinter as tk
+from pathlib import Path
 from tkinter import ttk
 
 import config
 from audio_recorder import AudioRecorder
+
+
+_ICON_DIR = Path(__file__).parent / "icons"
+# Höhere Auflösung zuerst — Tk skaliert für Titlebar/Cmd+Tab/Dock automatisch.
+_ICON_CANDIDATES = ("jarvis-wave.png", "jarvis-wave-256.png", "jarvis-wave-128.png")
 
 
 class JarvisGUI:
@@ -37,6 +43,12 @@ class JarvisGUI:
         self.root.geometry("660x640")
         self.root.configure(bg=self.COLORS["bg_primary"])
 
+        # Referenz auf das PhotoImage halten — sonst sammelt der GC es ein
+        # und das Icon verschwindet aus der Titlebar / Dock.
+        self._app_icon = self._load_app_icon()
+        if self._app_icon is not None:
+            self.root.iconphoto(True, self._app_icon)
+
         self._setup_styles()
 
         self.execution_mode = tk.StringVar(value=config.EXECUTION_MODE)
@@ -49,6 +61,18 @@ class JarvisGUI:
         self.is_running: bool = False
 
         self._create_ui()
+
+    @staticmethod
+    def _load_app_icon() -> tk.PhotoImage | None:
+        """Lädt das Jarvis-Icon für Titlebar / Dock. None bei Fehlschlag."""
+        for name in _ICON_CANDIDATES:
+            path = _ICON_DIR / name
+            if path.exists():
+                try:
+                    return tk.PhotoImage(file=str(path))
+                except tk.TclError:
+                    continue
+        return None
 
     # ── Styles ───────────────────────────────────────────────────────────────
 
