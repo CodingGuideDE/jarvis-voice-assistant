@@ -12,9 +12,9 @@ import config
 from audio_recorder import AudioRecorder
 
 
-_ICON_DIR = Path(__file__).parent / "icons"
+_ICON_DIR = Path(__file__).parent / "icons" / "jarvis-wave-d"
 # Höhere Auflösung zuerst — Tk skaliert für Titlebar/Cmd+Tab/Dock automatisch.
-_ICON_CANDIDATES = ("jarvis-wave.png", "jarvis-wave-256.png", "jarvis-wave-128.png")
+_ICON_CANDIDATES = ("jarvis-wave-d.png", "jarvis-wave-d-256.png", "jarvis-wave-d-128.png")
 
 
 class JarvisGUI:

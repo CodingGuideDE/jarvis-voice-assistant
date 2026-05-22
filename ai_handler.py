@@ -11,6 +11,7 @@ from typing import Callable, Optional
 import requests
 
 import config
+from tts import SayStreamer, SentenceEmitter
 
 
 class AIHandler:
@@ -21,6 +22,7 @@ class AIHandler:
         self._ready: bool = False
         self.on_token: Optional[Callable[[str], None]] = None
         self.on_status: Optional[Callable[[str], None]] = None
+        self._tts = SayStreamer()
 
     def connect(self) -> None:
         """Prüft Ollama-Erreichbarkeit und wärmt das Modell vor."""
@@ -67,7 +69,11 @@ class AIHandler:
         prompt = self._build_prompt(text, mode)
 
         if mode == "speak":
-            full_response = self._query_llm(prompt, mode)
+            # Satzweises Streaming: sobald der erste Satz fertig gestreamt
+            # ist, beginnt die Wiedergabe — während das LLM weiter generiert.
+            emitter = SentenceEmitter(on_sentence=self._tts.speak_sentence)
+            full_response = self._query_llm(prompt, mode, on_chunk=emitter.feed)
+            emitter.flush()
             if not full_response:
                 return
             if self.on_status:
@@ -75,7 +81,6 @@ class AIHandler:
                 self.on_status(f"Antwort: {preview}")
             if self.on_token:
                 self.on_token(f"\nJarvis: {full_response}\n")
-            self._say(full_response)
             return
 
         # Execute-Modus
@@ -102,8 +107,14 @@ class AIHandler:
                     self.on_token(f"\nJarvis (korrigiert): {retry_script}\n")
                 self.execute_script(retry_script)
 
-    def _query_llm(self, prompt: str, mode: str) -> str:
-        """Sendet einen Prompt an Ollama und gibt die gestreamte Antwort zurück."""
+    def _query_llm(self, prompt: str, mode: str,
+                   on_chunk: Optional[Callable[[str], None]] = None) -> str:
+        """Sendet einen Prompt an Ollama und gibt die gestreamte Antwort zurück.
+
+        Wenn `on_chunk` gesetzt ist, wird es für jedes Response-Token-Stück
+        aufgerufen — für satzweises TTS-Streaming. Thinking-Chunks werden
+        NICHT weitergereicht.
+        """
         max_tokens = (
             config.LLM_MAX_TOKENS_EXECUTE if mode == "execute"
             else config.LLM_MAX_TOKENS_SPEAK
@@ -160,6 +171,8 @@ class AIHandler:
                 if chunk:
                     parts.append(chunk)
                     print(chunk, end="", flush=True)
+                    if on_chunk:
+                        on_chunk(chunk)
                 if data.get("done"):
                     break
 
@@ -223,7 +236,6 @@ class AIHandler:
                 "- KEINE Markdown-Code-Blöcke (kein ```), KEINE Erklärungen, "
                 "kein Kommentar davor oder danach\n"
                 "- Verwende korrekte AppleScript-Syntax\n"
-                "- Für UI-Steuerung 'tell application \"System Events\"' verwenden\n\n"
                 "BEISPIELE:\n"
                 "Anfrage: Öffne den Finder\n"
                 'tell application "Finder" to activate\n\n'
